@@ -4,22 +4,26 @@ import re
 import configparser
 import urllib.request
 from urllib.error import HTTPError
+
+from PyPDF2 import PdfFileMerger, PdfFileReader
 from fpdf import FPDF
 import PyPDF2
+from lxml import html
 import time
 import _helpers
 
 
-class DSPACEBookFetch:
-    DSPACE_BASE_URL = 'https://images.DSPACE.bl.uk'
-    DSPACE_ARCHIVE_URL = 'https://DSPACE.bl.uk/archive-file/'
-    DSPACE_CONFIG_FILENAME = 'DSPACE_conf.ini'
-    DSPACE_FILENAME = 'default.jpg'
+class EAPBookFetch:
+
+    EAP_BASE_URL = 'http://dspace.wbpublibnet.gov.in:8080'
+    EAP_INDEX_URL = '/jspui/handle/'
+    EAP_CONFIG_FILENAME = 'dsp_conf.ini'
+    EAP_FILENAME = 'default.jpg'
     DEFAULT_HEIGHT = 1200
     DEFAULT_WIDTH = 1200 * 0.8
     JPEG_PATH = 'jpgs'
     PDF_PATH = 'pdfs'
-    API_BASE_URL = 'https://commons.wikimedia.org/w/api.php'
+    API_BASE_URL = 'https://bn.wikisource.org/w/api.php'
     CHUNK_SIZE = 1000000
 
     @staticmethod
@@ -36,77 +40,55 @@ class DSPACEBookFetch:
         else:
             return 0
 
+    def get_url_for_page(self):
+        page = requests.get(self.url)
+        links = html.fromstring(page.content).findall('.//a')
+        urls = []
+        for x in links:
+            if "/jspui/bitstream" in x.get('href') and self.EAP_BASE_URL + x.get('href') not in urls:
+                urls.append(self.EAP_BASE_URL + x.get('href'))
+        return urls
+
     def download_jpg(self):
-        base_dspace = self.url.split('/')[0]
-        dspace_url_for_entry = self.url.replace('/', '_')
-        combined_url = self.join_url(self.DSPACE_BASE_URL, base_dspace, dspace_url_for_entry)
-        pg = 1
-        can_go = True
-        file_list = []
-        if not os.path.exists(self.JPEG_PATH):
-            os.makedirs(self.JPEG_PATH)
-        while can_go:
-            dl_url = self.join_url(combined_url, str(pg) + '.jp2', 'full', str(self.height) + ',' +
-                                   str(self.DEFAULT_WIDTH), str(self.rotation),
-                                   self.DSPACE_FILENAME + '?t=' + str(int(time.time() * 1000)))
-
-            title = os.path.join(self.JPEG_PATH, dspace_url_for_entry + '_' + str(pg) + '.jpg')
-            pg = pg + 1
-            print('Downloading ' + title)
-            try:
-                urllib.request.urlretrieve(dl_url, title)
-                file_list.append(title)
-            except HTTPError:
-                can_go = False
-
-        if self.type == 'p':
-            pdf = FPDF(orientation=str(self.type), unit='pt', format=(self.DEFAULT_WIDTH + 50, int(self.height) + 50))
-            pdf.add_page(orientation=self.type)
-        else:
-            pdf = FPDF(orientation=self.type, unit='pt', format=(self.height + 50, self.DEFAULT_WIDTH + 50))
-            pdf.add_page(orientation=self.type)
-
-        for image in file_list:
-            print('Adding ' + image + ' to PDF')
-            if self.type == 'p':
-                pdf.image(image, h=self.height, w=self.DEFAULT_WIDTH)
-            else:
-                pdf.image(image, h=self.height, w=self.DEFAULT_WIDTH)
-        page_count = pdf.page_no()
+        urls = self.get_url_for_page()
+        print(urls, len(urls))
+        count = 0
+        filenames = []
         if not os.path.exists(self.PDF_PATH):
             os.makedirs(self.PDF_PATH)
-        pdf.output(os.path.join(self.PDF_PATH, dspace_url_for_entry + '.pdf'))
+        for url in urls:
+            count += 1
 
-        if page_count > len(file_list):
-            # delete pg 1
-            infile = PyPDF2.PdfFileReader(os.path.join(self.PDF_PATH, dspace_url_for_entry + '.pdf'))
-            outfile = PyPDF2.PdfFileWriter()
-            pg = 1
-            print('Deleting blank page...')
-            while pg < page_count:
-                p = infile.getPage(pg)
-                pg = pg + 1
-                outfile.addPage(p)
-            exists, dspace_file = _helpers.page_exists(self.DSPACE_ARCHIVE_URL + self.url.replace('/', '-'))
-            if not exists:
-                dspace_filename = dspace_url_for_entry
+            print('Downloading part', count)
+            title = os.path.join(self.PDF_PATH, self.ds_fn + '_' + str(count) + '.pdf')
+            nexttitle = os.path.join(self.PDF_PATH, self.ds_fn + '_' + str(count + 1) + '.pdf')
+
+            filenames.append(title)
+            if os.path.exists(nexttitle):
+                filenames.append(title)
+                continue
             else:
-                dspace_filename = dspace_file.title.text.split('|')[0].strip()
-                dspace_filename = re.sub(r'[^\w]', '', dspace_filename)
-            with open(os.path.join(self.PDF_PATH, dspace_filename + '.pdf'), 'wb') as f:
-                outfile.write(f)
-                print('Writing to ' + dspace_filename + '.pdf')
+                urllib.request.urlretrieve(url, title)
+                filenames.append(title)
+        print('Merging', count, 'files')
+        merger = PdfFileMerger()
+        for filename in filenames:
+            merger.append(PdfFileReader(open(filename, 'rb')))
+        os.remove(os.path.join(self.PDF_PATH, self.ds_fn + '.pdf'))
+        merger.write(os.path.join(self.PDF_PATH, self.ds_fn + '.pdf'))
+        for filename in filenames:
             try:
-                os.remove(os.path.join(self.PDF_PATH, dspace_url_for_entry + '.pdf'))
-            except OSError:
+                os.remove(filename)
+            except Exception:
                 pass
-            return dspace_filename
-        return ''
+        return self.ds_fn
+
 
     def read_config(self):
         config_parser = configparser.ConfigParser()
-        config_parser.read(self.DSPACE_CONFIG_FILENAME)
-        self.url = config_parser.get('download', 'url')
+        config_parser.read(self.EAP_CONFIG_FILENAME, encoding='utf8')
+        self.url = self.EAP_BASE_URL + self.EAP_INDEX_URL + config_parser.get('download', 'url')
+
         try:
             self.username = config_parser.get('wiki', 'username')
             self.password = config_parser.get('wiki', 'pwd')
@@ -120,6 +102,11 @@ class DSPACEBookFetch:
             self.date = config_parser.get('wiki', 'date')
         except Exception:
             pass
+        if not self.filename:
+            self.ds_fn = config_parser.get('download', 'url').replace('/', '_')
+        else:
+            self.ds_fn = self.filename
+
 
     def get_token(self):
         session = requests.Session()
@@ -162,9 +149,10 @@ class DSPACEBookFetch:
                        "| Title        = " + self.title + "\n" + \
                        "| Date         = " + self.date + "\n" + \
                        "| Language     = {{language|bn}}\n" + \
-                       "| Wikisource   = s:bn:{{PAGENAME}}\n" + \
+                       "| Wikisource   = s:bn:নির্ঘণ্ট:{{PAGENAME}}\n" + \
                        "| Description  = " + self.description + "\n" + \
-                       "| Source       =  [" + self.DSPACE_ARCHIVE_URL + self.url + "]" +\
+                       "| Source       =  {{Endangered Archives Programme|url=" + self.url + \
+                       "}}{{Institution:British Library}}\n" + \
                        "| Image        =  {{PAGENAME}}\n" + \
                        "}}\n" + \
                        "=={{int:license-header}}==\n" + self.license + "\n" + \
@@ -237,26 +225,29 @@ class DSPACEBookFetch:
 
     def run(self):
         try:
-            with open(self.DSPACE_CONFIG_FILENAME):
+            with open(self.EAP_CONFIG_FILENAME):
                 self.read_config()
         except FileNotFoundError:
             print('No configuration file found!')
             return 0
-        filename = self.download_pdf()
+        filename = self.download_jpg()
+
         try:
             session, self.token = self.get_token()
-            self.upload_file(session, filename)
+            self.upload_file(session, self.ds_fn)
         except (RuntimeError, HTTPError) as e:
             print(e)
             print('Could not upload file. Please verify your credentials.')
 
         return 1
 
+
     def __init__(self):
+        self.rotation = 0
         self.url = ''
         self.username = ''
         self.password = ''
-        self.summary = 'Uploaded via DSPACE2PDF'
+        self.summary = 'Uploaded via dspace2PDF'
         self.title = ''
         self.description = ''
         self.author = ''
@@ -264,10 +255,11 @@ class DSPACEBookFetch:
         self.date = ''
         self.license = ''
         self.filename = ''
+        self.ds_fn = ''
 
 
 if __name__ == '__main__':
     start_time = time.time()
-    downloaded = DSPACEBookFetch().run()
+    downloaded = EAPBookFetch().run()
     elapsed_time_secs = time.time() - start_time
     print("Uploaded " + str(downloaded) + " files in " + str(elapsed_time_secs) + " seconds")
