@@ -74,7 +74,11 @@ class EAPBookFetch:
         merger = PdfFileMerger()
         for filename in filenames:
             merger.append(PdfFileReader(open(filename, 'rb')))
-        os.remove(os.path.join(self.PDF_PATH, self.ds_fn + '.pdf'))
+        try:
+            if os.path.exists(os.path.join(self.PDF_PATH, self.ds_fn + '.pdf')):
+                os.remove(os.path.join(self.PDF_PATH, self.ds_fn + '.pdf'))
+        except Exception:
+            pass
         merger.write(os.path.join(self.PDF_PATH, self.ds_fn + '.pdf'))
         for filename in filenames:
             try:
