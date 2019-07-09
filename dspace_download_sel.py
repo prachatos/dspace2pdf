@@ -23,7 +23,7 @@ class EAPBookFetch:
     DEFAULT_WIDTH = 1200 * 0.8
     JPEG_PATH = 'jpgs'
     PDF_PATH = 'pdfs'
-    API_BASE_URL = 'https://bn.wikisource.org/w/api.php'
+    API_BASE_URL = 'https://commons.wikimedia.org/w/api.php'
     CHUNK_SIZE = 1000000
 
     @staticmethod
@@ -104,6 +104,7 @@ class EAPBookFetch:
             self.author = config_parser.get('wiki', 'author')
             self.license = config_parser.get('wiki', 'license')
             self.date = config_parser.get('wiki', 'date')
+            self.API_BASE_URL = 'https://' + config_parser.get('lang') + '.' + config_parser.get('proj') + '.org/w/api.php'
         except Exception:
             pass
         if not self.filename:
