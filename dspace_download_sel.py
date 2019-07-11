@@ -236,7 +236,7 @@ class EAPBookFetch:
 
         try:
             session, self.token = self.get_token()
-            #self.upload_file(session, self.ds_fn)
+            self.upload_file(session, self.ds_fn)
         except (RuntimeError, HTTPError) as e:
             print(e)
             print('Could not upload file. Please verify your credentials.')
