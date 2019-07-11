@@ -51,7 +51,7 @@ class EAPBookFetch:
 
     def download_jpg(self):
         urls = self.get_url_for_page()
-        print(urls, len(urls))
+        #print(urls, len(urls))
         count = 0
         filenames = []
         if not os.path.exists(self.PDF_PATH):
@@ -61,24 +61,21 @@ class EAPBookFetch:
 
             print('Downloading part', count)
             title = os.path.join(self.PDF_PATH, self.ds_fn + '_' + str(count) + '.pdf')
-            nexttitle = os.path.join(self.PDF_PATH, self.ds_fn + '_' + str(count + 1) + '.pdf')
+            # nexttitle = os.path.join(self.PDF_PATH, self.ds_fn + '_' + str(count + 1) + '.pdf')
 
+            if os.path.exists(title):
+                os.remove(title)
+
+            urllib.request.urlretrieve(url, title)
             filenames.append(title)
-            if os.path.exists(nexttitle):
-                filenames.append(title)
-                continue
-            else:
-                urllib.request.urlretrieve(url, title)
-                filenames.append(title)
         print('Merging', count, 'files')
+        if os.path.exists(os.path.join(self.PDF_PATH, self.ds_fn + '.pdf')):
+            os.remove(os.path.join(self.PDF_PATH, self.ds_fn + '.pdf'))
+        open(os.path.join(self.PDF_PATH, self.ds_fn + '.pdf'), 'w')
+
         merger = PdfFileMerger()
         for filename in filenames:
             merger.append(PdfFileReader(open(filename, 'rb')))
-        try:
-            if os.path.exists(os.path.join(self.PDF_PATH, self.ds_fn + '.pdf')):
-                os.remove(os.path.join(self.PDF_PATH, self.ds_fn + '.pdf'))
-        except Exception:
-            pass
         merger.write(os.path.join(self.PDF_PATH, self.ds_fn + '.pdf'))
         for filename in filenames:
             try:
@@ -239,7 +236,7 @@ class EAPBookFetch:
 
         try:
             session, self.token = self.get_token()
-            self.upload_file(session, self.ds_fn)
+            #self.upload_file(session, self.ds_fn)
         except (RuntimeError, HTTPError) as e:
             print(e)
             print('Could not upload file. Please verify your credentials.')
