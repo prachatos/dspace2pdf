@@ -153,8 +153,8 @@ class EAPBookFetch:
                        "| Language     = {{language|bn}}\n" + \
                        "| Wikisource   = s:bn:নির্ঘণ্ট:{{PAGENAME}}\n" + \
                        "| Description  = " + self.description + "\n" + \
-                       "| Source       =  {{Endangered Archives Programme|url=" + self.url + \
-                       "}}{{Institution:British Library}}\n" + \
+                       "| Source       =  {{WBPLN|url=" + self.url + \
+                       "}}\n" + \
                        "| Image        =  {{PAGENAME}}\n" + \
                        "}}\n" + \
                        "=={{int:license-header}}==\n" + self.license + "\n" + \
